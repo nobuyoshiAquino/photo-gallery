@@ -1,11 +1,15 @@
 package xyz.nobu.photogallery;
 
+import android.graphics.Bitmap;
+import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.os.Handler;
 import android.support.v4.app.Fragment;
 import android.support.v7.widget.GridLayoutManager;
 import android.support.v7.widget.RecyclerView;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -24,6 +28,7 @@ public class PhotoGalleryFragment extends Fragment {
 
     private RecyclerView mPhotoRecyclerView;
     private List<GalleryItem> mItems = new ArrayList<>();
+    private ThumbnailDownloader<PhotoHolder> mThumbnailDownloader;
 
     public static PhotoGalleryFragment newInstance() {
         return new PhotoGalleryFragment();
@@ -44,6 +49,35 @@ public class PhotoGalleryFragment extends Fragment {
          * then fire up its background thread and call doInBackground(...)
          */
         new FetchItemsTask().execute();
+
+        /**
+         * Remember that by default, the Handler will attach itself to the
+         * Looper for the current thread. Because this Handler is created
+         * in onCreate(...), it will be attached to the main thread's Looper.
+         */
+        Handler responseHandler = new Handler();
+
+        /**
+         * Now ThumbnailDownloader has access via mResponseHandler to a
+         * Handler that is tied to the main thread's Looper. It also has
+         * your ThumbnailDownloadListener to do the UI work with the
+         * returning Bitmap.
+         */
+        mThumbnailDownloader = new ThumbnailDownloader<>(responseHandler);
+        mThumbnailDownloader.setThumbnailDownloadListener(
+            new ThumbnailDownloader.ThumbnailDownloadListener<PhotoHolder>() {
+                @Override
+                public void onThumbnailDownloaded(PhotoHolder photoHolder,
+                                                  Bitmap bitmap) {
+                    Drawable drawable = new BitmapDrawable(getResources(), bitmap);
+                    photoHolder.bindDrawable(drawable);
+                }
+            }
+        );
+        mThumbnailDownloader.start();
+        mThumbnailDownloader.getLooper();
+        Log.i(TAG, "Background thread started");
+
     }
 
     @Override
@@ -57,6 +91,19 @@ public class PhotoGalleryFragment extends Fragment {
         setupAdapter();
 
         return v;
+    }
+
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        mThumbnailDownloader.clearQueue();
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        mThumbnailDownloader.quit();
+        Log.i(TAG, "Background thread destroyed");
     }
 
     private void setupAdapter() {
@@ -100,6 +147,7 @@ public class PhotoGalleryFragment extends Fragment {
             GalleryItem galleryItem = mGalleryItems.get(position);
             Drawable placeholder = getResources().getDrawable(R.drawable.bill_up_close);
             photoHolder.bindDrawable(placeholder);
+            mThumbnailDownloader.queueThumbnail(photoHolder, galleryItem.getUrl());
         }
 
         @Override
