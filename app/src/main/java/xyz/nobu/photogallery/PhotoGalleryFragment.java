@@ -27,7 +27,7 @@ import java.util.List;
  * Created by nobu on 3/24/17.
  */
 
-public class PhotoGalleryFragment extends Fragment {
+public class PhotoGalleryFragment extends VisibleFragment {
 
     private static final String TAG = "PhotoGalleryFragment";
 
